@@ -61,7 +61,12 @@ data/
 ### Tracking
 
 ```bash
-python scripts/train_tracking.py --data-dir data/tracking_dataset --output-dir outputs/tracking --conv-type gin --edge positional --temporal-model attention 
+python scripts/train_tracking.py \
+    --data-dir data/tracking_dataset \
+    --output-dir outputs/tracking \
+    --conv-type gin \
+    --edge positional \
+    --temporal-model attention 
 ```
 
 #### Graph Convolution Operators `--conv-type`
@@ -143,7 +148,7 @@ python scripts/infer_tracking.py \
 For video, use the following command.
 ```bash
 python scripts/infer_video.py \
-    --checkpoint outputs/video/models/best_model.pt \
+    --checkpoint weights/video/best_model.pt \
     --preprocessed-dir data/video_dataset/preprocessed \
     --backbone videomae2 \
     --temporal-model maxpool \
