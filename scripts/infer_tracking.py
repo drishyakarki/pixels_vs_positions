@@ -2,7 +2,9 @@ import os
 import sys
 import random
 import argparse
+from datetime import datetime
 import json
+import sys
 
 import numpy as np
 import torch
@@ -191,7 +193,8 @@ def main():
     parser.add_argument("--batch-size", type=int, default=32)
 
     args = parser.parse_args()
-    
+
+    start_time = datetime.now()
     set_reproducibility(args.seed)
     os.makedirs(args.output_dir, exist_ok=True)
     
@@ -258,6 +261,13 @@ def main():
     balanced_acc = evaluate_model(model, test_loader, test_dataset, args.output_dir)
     print(f"\nFinal Balanced Accuracy: {balanced_acc:.2f}%")
 
+    end_time = datetime.now()
+    total_time = end_time - start_time
+    total_seconds = int(total_time.total_seconds())
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+
+    print(f"\nTotal Time: {hours:02}:{minutes:02}:{seconds:02}")
 
 if __name__ == "__main__":
     main()
