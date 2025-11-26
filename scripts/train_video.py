@@ -24,7 +24,6 @@ from models.video import VideoClassifier
 def set_reproducibility(seed=42):
     """
     sets random seeds for reproducibility across runs.
-    note: cudnn deterministic settings are commented out to match original video code behavior.
     """
     random.seed(seed)
     np.random.seed(seed)
@@ -32,13 +31,9 @@ def set_reproducibility(seed=42):
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     
-    # torch.backends.cudnn.deterministic = True
-    # torch.backends.cudnn.benchmark = False
-    
     torch.use_deterministic_algorithms(True, warn_only=False)
     
     os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
-    # os.environ['PYTHONHASHSEED'] = str(seed)
 
 
 def seed_worker(worker_id):

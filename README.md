@@ -29,7 +29,18 @@ python -m pip install torch-geometric seaborn numpy tqdm transformers opencv-pyt
 ```
 
 ## Data
-The data SoccerNet-GAR will be provided here.
+
+The SoccerNet-GAR dataset is available on [HuggingFace](https://huggingface.co/datasets/OpenSportsLab/soccernetpro-classification-GAR/tree/paper-data).
+
+<details>
+<summary>Alternatively, you can generate the dataset from PFF FC source data.</summary>
+
+SoccerNet-GAR is derived from [PFF FC World Cup 2022 dataset](https://www.blog.fc.pff.com/blog/enhanced-2022-world-cup-dataset). Sign up to their newsletter to gain access to their Google Drive link. Download the folders inside `Event Data/March 14, 2025` and `Tracking Data`, then place them in `data/events` and `data/tracking` respectively.
+```bash
+python utils/pff_to_soccernet_gar.py --modality tracking
+python utils/pff_to_soccernet_gar.py --modality video
+```
+</details>
 
 The dataset is organized in this format
 ```
@@ -41,9 +52,19 @@ data/
 │   ├── valid/
 │   │   ├── valid.json
 │   │   └── videos/
-│   └── test/
-│       ├── test.json
-│       └── videos/
+│   ├── test/
+│   │   ├── test.json
+│   │   └── videos/
+│   └── preprocessed/
+│       ├── train/
+│       │   ├── clips.json
+│       │   └── *.npy
+│       ├── valid/
+│       │   ├── clips.json
+│       │   └── *.npy
+│       └── test/
+│           ├── clips.json
+│           └── *.npy
 └── tracking_dataset/
     ├── train/
     │   ├── train.json
@@ -155,7 +176,7 @@ python scripts/infer_video.py \
 ```
 
 ## Trained Models
-Trained models will also be provided.
+Trained models will also be provided. Currently, the best tracking model is provided at `weights/tracking/best_model.pt`.
 
 ## Contact
 
