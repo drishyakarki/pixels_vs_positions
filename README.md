@@ -176,7 +176,7 @@ python scripts/infer_video.py \
 ```
 
 ## Trained Models
-Trained models will also be provided. Currently, the best tracking model is provided at `weights/tracking/best_model.pt`.
+Trained models will also be provided. Currently, the best tracking model is provided at `weights/tracking/best_model.pt` and the best video model can be downloaded from [here](https://drive.google.com/file/d/1qHNxakwn2gZaIPCEb85yU7xfJBnOtUgK/view?usp=sharing).
 
 ## Contact
 
