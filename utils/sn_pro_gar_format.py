@@ -13,16 +13,22 @@ LABELS = [
     "THROW IN", "SHOT", "PLAYER SUCCESSFUL TACKLE", "FREE KICK", "GOAL"
 ]
 
+TIME_TOLERANCE_MS = 10
+
 
 def process_game(args):
-    game_id, video_path, parquet_path, annotations, split, output_dir, window_size, frame_interval = args
+    game_id, video_path, parquet_path, annotations, split, output_dir, window_size, frame_interval, modality = args
     
-    cap = cv2.VideoCapture(video_path)
-    fps = cap.get(cv2.CAP_PROP_FPS)
+    cap = None
+    fps = None
+    if modality in ['frames', 'both']:
+        cap = cv2.VideoCapture(video_path)
+        fps = cap.get(cv2.CAP_PROP_FPS)
     
-    tracking_df = pd.read_parquet(parquet_path)
+    tracking_df = pd.read_parquet(parquet_path).sort_values('videoTimeMs')
     
     results = []
+    skipped = 0
     
     for ann in annotations:
         position_ms = ann['position']
@@ -31,34 +37,66 @@ def process_game(args):
         if label not in LABELS:
             continue
         
-        center_frame = int((position_ms / 1000.0) * fps)
-        start_frame = center_frame - (window_size // 2) * frame_interval
+        # --- Tracking alignment (same as pixels_vs_positions) ---
+        # find closest tracking frame by videoTimeMs
+        time_diff = (tracking_df['videoTimeMs'] - position_ms).abs()
+        closest_idx = time_diff.idxmin()
         
-        # extract video frames
-        frames = []
-        for i in range(window_size):
-            frame_idx = start_frame + i * frame_interval
-            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-            ret, frame = cap.read()
-            if ret:
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                frame = cv2.resize(frame, (224, 224))
-                frames.append(frame)
-            else:
-                frames.append(np.zeros((224, 224, 3), dtype=np.uint8))
+        # skip if no tracking data within tolerance
+        if time_diff.loc[closest_idx] > TIME_TOLERANCE_MS:
+            skipped += 1
+            continue
         
-        frames = np.array(frames)
+        closest_row = tracking_df.loc[closest_idx]
+        center_frame_num = int(closest_row['frameNum'])
         
-        # extract tracking clip
-        frame_indices = [start_frame + i * frame_interval for i in range(window_size)]
-        frame_times_ms = [(f / fps) * 1000 for f in frame_indices]
+        # build window using frameNum (same as pixels_vs_positions _extract_window_features)
+        half_window = window_size // 2
+        frame_numbers = [
+            center_frame_num + (i - half_window) * frame_interval
+            for i in range(window_size)
+        ]
         
+        # extract tracking clip rows by frameNum
         clip_rows = []
-        for target_ms in frame_times_ms:
-            idx = (tracking_df['videoTimeMs'] - target_ms).abs().idxmin()
-            clip_rows.append(tracking_df.loc[idx])
+        for fnum in frame_numbers:
+            frame_data = tracking_df[tracking_df['frameNum'] == fnum]
+            if not frame_data.empty:
+                clip_rows.append(frame_data.iloc[0])
+            else:
+                # create empty row for missing frames
+                # when parsed by _parse_frame, all features will be -200.0 sentinel values
+                empty_row = pd.Series({
+                    'videoTimeMs': np.nan,
+                    'frameNum': fnum,
+                    'period': -1,
+                    'balls': '[]',
+                    'homePlayers': '[]',
+                    'awayPlayers': '[]',
+                })
+                clip_rows.append(empty_row)
         
         clip_df = pd.DataFrame(clip_rows).reset_index(drop=True)
+        
+        # --- Video extraction (unchanged) ---
+        frames = None
+        if modality in ['frames', 'both']:
+            center_frame = int((position_ms / 1000.0) * fps)
+            start_frame = center_frame - (window_size // 2) * frame_interval
+            
+            frames = []
+            for i in range(window_size):
+                frame_idx = start_frame + i * frame_interval
+                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+                ret, frame = cap.read()
+                if ret:
+                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    frame = cv2.resize(frame, (224, 224))
+                    frames.append(frame)
+                else:
+                    frames.append(np.zeros((224, 224, 3), dtype=np.uint8))
+            
+            frames = np.array(frames)
         
         results.append({
             'frames': frames,
@@ -70,7 +108,12 @@ def process_game(args):
             'team': ann['team']
         })
     
-    cap.release()
+    if cap is not None:
+        cap.release()
+    
+    if skipped > 0:
+        print(f"  {game_id}: skipped {skipped} events (time tolerance > {TIME_TOLERANCE_MS}ms)")
+    
     return results
 
 
@@ -113,14 +156,20 @@ def main():
             video_path = os.path.join(args.video_dir, split, 'videos', f'{game_id}.mp4')
             parquet_path = os.path.join(args.tracking_dir, split, 'videos', f'{game_id}.parquet')
             
-            if not os.path.exists(video_path) or not os.path.exists(parquet_path):
-                print(f"Skipping {game_id}: missing files")
-                continue
+            if args.modality in ['frames', 'both']:
+                if not os.path.exists(video_path) or not os.path.exists(parquet_path):
+                    print(f"Skipping {game_id}: missing files")
+                    continue
+            elif args.modality == 'tracking':
+                if not os.path.exists(parquet_path):
+                    print(f"Skipping {game_id}: missing parquet")
+                    continue
             
             annotations = video_data.get('annotations', [])
             game_args.append((
                 game_id, video_path, parquet_path, annotations,
-                split, args.output_dir, args.window_size, args.frame_interval
+                split, args.output_dir, args.window_size, args.frame_interval,
+                args.modality
             ))
         
         # process games in parallel
