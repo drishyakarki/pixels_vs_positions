@@ -83,6 +83,7 @@ if __name__ == '__main__':
     myModel.train(
         train_set="path/to/data/annotations_train.json",
         valid_set="path/to/data/annotations_valid.json",
+        use_ddp=False
     )
 
     myModel.infer(test_set="path/to/data/annotations_test.json")

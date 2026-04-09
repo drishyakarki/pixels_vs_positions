@@ -1,9 +1,15 @@
 TASK: classification
+# this is the config for classification task on sngar-tracking dataset.
+# this config is used for the backbone ablation experiments reported in the paper:
+# "Pixels or Positions? Benchmarking Modalities in Group Activity Recognition"
+# https://arxiv.org/abs/2511.12606
+# GEN backbone + maxpool temporal aggregation + positional edges.
+# it has all the hyperparameters value used to reproduce the results reported in the paper.
 
 DATA:
   dataset_name: sngar
   data_modality: tracking_parquet
-  data_dir: /home/karkid/soccernetpro/tracking-dataset
+  data_dir: /home/karkid/opensportslib/tracking-dataset
   preload_data: false
   train: 
     type: annotations_train.json

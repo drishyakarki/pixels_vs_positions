@@ -3,8 +3,7 @@ TASK: classification
 # this config is used for the main experiments reported in the paper:
 # "Pixels or Positions? Benchmarking Modalities in Group Activity Recognition"
 # https://arxiv.org/abs/2511.12606
-# videomae - fully finetuned on the sngar-frames dataset.
-# it has all the hyperparameters value used to reproduce the results reported in the paper.
+# videomae2 - fully finetuned - data scaling experiment with 40 training matches.
 
 DATA:
   dataset_name: sngar
@@ -40,14 +39,14 @@ DATA:
     jitter_prob: 0.5
     jitter_params: [0.2, 0.2, 0.2, 0.1]
   data_slicing: # only used for data scaling experiments
-    enabled: false
-    training_matches: 45  # default: all 45 training matches
+    enabled: true
+    training_matches: 40
 
 MODEL:
   type: custom
   backbone:
-    type: videomae                  # videomae | videomae2
-    pretrained_model: MCG-NJU/videomae-base
+    type: videomae2                  # videomae | videomae2
+    pretrained_model: OpenGVLab/VideoMAEv2-Base
     # MCG-NJU/videomae-base | OpenGVLab/VideoMAEv2-Base
     hidden_dim: 768
     freeze: false # true for frozen backbone, false for unfrozen backbone i.e. full-finetuning

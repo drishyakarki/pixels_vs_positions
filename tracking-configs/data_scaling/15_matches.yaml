@@ -1,9 +1,9 @@
 TASK: classification
 # this is the config for classification task on sngar-tracking dataset.
-# this config is used for the temporal aggregation ablation experiments reported in the paper:
+# this config is used for the data scaling experiments reported in the paper:
 # "Pixels or Positions? Benchmarking Modalities in Group Activity Recognition"
 # https://arxiv.org/abs/2511.12606
-# GIN backbone + BiLSTM temporal aggregation + positional edges.
+# GIN backbone + maxpool temporal aggregation + positional edges - data scaling experiment with 15 training matches.
 # it has all the hyperparameters value used to reproduce the results reported in the paper.
 
 DATA:
@@ -11,7 +11,7 @@ DATA:
   data_modality: tracking_parquet
   data_dir: /home/karkid/opensportslib/tracking-dataset
   preload_data: false
-  train: 
+  train:
     type: annotations_train.json
     video_path: ${DATA.data_dir}/train
     path: ${DATA.train.video_path}/train.json
@@ -49,6 +49,9 @@ DATA:
   pitch_half_width: 50.0
   max_displacement: 110.0
   max_ball_height: 30.0
+  data_slicing: # only used for data scaling experiments
+    enabled: true
+    training_matches: 15
 
 MODEL:
   type: custom
@@ -60,7 +63,7 @@ MODEL:
     dropout: 0.1
   neck:
     type: TemporalAggregation
-    agr_type: bilstm
+    agr_type: maxpool
     hidden_dim: 64
     dropout: 0.1
     use_position_encoding: true
@@ -95,7 +98,7 @@ TRAIN:
     patience: 10
     factor: 0.1
     min_lr: 1e-8
-  
+
   criterion:
     type: CrossEntropyLoss
 
