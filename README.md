@@ -18,7 +18,7 @@ Our tracking baseline (GIN + MaxPool + Positional Edges, **180K** parameters) ac
 This project uses [OpenSportsLib](https://github.com/OpenSportsLab/opensportslib) for training and evaluation.
 
 ```bash
-pip install opensportslib
+pip install opensportslib==0.1.1
 ```
 
 Or clone and install from source:
