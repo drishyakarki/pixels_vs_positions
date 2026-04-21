@@ -13,26 +13,52 @@ Our tracking baseline (GIN + MaxPool + Positional Edges, **180K** parameters) ac
 | **Tracking** | GIN + MaxPool + Positional | **180K** | **77.8** | **57.0** | 4 GPU.h |
 | Video | VideoMAEv2-B (finetuned) | 86.3M | 60.9 | 50.1 | 28 GPU.h |
 
-## Installation
+## Reproducing Tracking Results
 
-This project uses [OpenSportsLib](https://github.com/OpenSportsLab/opensportslib) for training and evaluation.
+Follow the six steps below in order. Each step tells you exactly which directory you should be in before running the commands. Do not skip ahead and do not change any paths. If you follow these steps as-is, you will reproduce the tracking baseline end-to-end.
+
+
+### Step 1: Create your workspace and clone this repository
+
+Open a terminal. Starting from your home directory (or anywhere you like to keep projects), run:
 
 ```bash
-pip install opensportslib==0.1.1
+mkdir reproducing-sn-gar
+cd reproducing-sn-gar
+git clone https://github.com/drishyakarki/pixels_vs_positions.git
 ```
 
-Or clone and install from source:
+Confirm you are inside the workspace folder:
+
 ```bash
-git clone https://github.com/OpenSportsLab/opensportslib.git
-cd opensportslib
-pip install -e .
+pwd
+# should end in /reproducing-sn-gar
 ```
 
-## Dataset
+Your directory layout at this point:
 
-Download the SoccerNet-GAR dataset from [HuggingFace](https://huggingface.co/datasets/OpenSportsLab/soccernetpro-classification-GAR).
+```
+reproducing-sn-gar/          <-- you are here
+└── pixels_vs_positions/
+```
 
-**Tracking data:**
+### Step 2: Create and activate the conda environment
+
+Stay inside `reproducing-sn-gar/`. Run these commands one at a time:
+
+```bash
+conda create -n osl python=3.12 pip -y
+conda activate osl
+pip install opensportslib==0.1.2
+opensportslib setup
+opensportslib setup --pyg
+```
+
+After this step your terminal prompt should start with `(osl)`. That means the environment is active. Every command from here on assumes `(osl)` is active.
+
+### Step 3: Download the tracking dataset
+
+You should still be inside `reproducing-sn-gar/`. Create a file named `download_data.py` with the following contents:
 
 ```python
 from huggingface_hub import snapshot_download
@@ -40,12 +66,155 @@ from huggingface_hub import snapshot_download
 snapshot_download(
     repo_id="OpenSportsLab/soccernetpro-classification-GAR",
     repo_type="dataset",
-    revision="tracking-parquet",
+    revision="tracking",
     local_dir="sngar-tracking",
 )
 ```
 
-**Video data:**
+Then run it:
+
+```bash
+python download_data.py
+```
+
+When the download finishes, your directory layout will be:
+
+```
+reproducing-sn-gar/          <-- you are here
+├── pixels_vs_positions/
+├── download_data.py
+└── sngar-tracking/
+    ├── train.zip
+    ├── valid.zip
+    ├── test.zip
+    └── annotations_*.json
+```
+
+### Step 4: Unzip the dataset splits
+
+From `reproducing-sn-gar/`, enter the dataset folder, unzip each split, delete the zip files, then return to the workspace:
+
+```bash
+cd sngar-tracking
+unzip train.zip && rm train.zip
+unzip valid.zip && rm valid.zip
+unzip test.zip && rm test.zip
+cd ..
+```
+
+Confirm you are back in the workspace folder:
+
+```bash
+pwd
+# should end in /reproducing-sn-gar
+```
+
+### Step 5: Create the training script
+
+You must create this script inside `reproducing-sn-gar/`, NOT inside the `pixels_vs_positions/` folder. Create a file named `run_tracking.py` with exactly the following contents:
+
+```python
+from opensportslib import model
+
+if __name__ == '__main__':
+    myModel = model.classification(
+        # path to the config file from the pixels_vs_positions repository.
+        # this one reproduces the baseline tracking experiment from Table 2.
+        config="pixels_vs_positions/main_tracking_gin_positional_maxpool.yaml",
+        # path to the dataset directory you downloaded in Step 3.
+        data_dir="sngar-tracking",
+    )
+
+    myModel.train(
+        train_set="sngar-tracking/annotations_train.json",
+        valid_set="sngar-tracking/annotations_valid.json",
+        use_ddp=False,
+    )
+
+    myModel.infer(test_set="sngar-tracking/annotations_test.json")
+```
+
+Your final directory layout should look like this:
+
+```
+reproducing-sn-gar/          <-- you are here
+├── pixels_vs_positions/
+├── sngar-tracking/
+├── download_data.py
+└── run_tracking.py
+```
+
+### Step 6: Train and evaluate
+
+From `reproducing-sn-gar/`, simply run:
+
+```bash
+python run_tracking.py
+```
+
+That is it. The script will train the model, run validation, and then report the final metrics on the test set. You do not need to edit any config files. You do not need to change any paths. Every path in the script is relative to the workspace folder.
+
+### Running a different experiment
+
+To reproduce a different row from the paper, only change the `config=` line in `run_tracking.py`. For example, to run the EdgeConv graph layer ablation from Table 4:
+
+```python
+config="pixels_vs_positions/tracking-configs/backbones_table_4/edgeconv.yaml",
+```
+
+The full list of config files is in the next section.
+
+## Configuration Files
+
+Each config file corresponds to one row in the paper's tables. The directory structure mirrors the ablation tables:
+
+```
+.
+├── main_tracking_gin_positional_maxpool.yaml      # Table 2: Tracking baseline
+├── main_video_videomae2_full_finetuned.yaml       # Table 2: Video baseline
+│
+├── tracking-configs/
+│   ├── backbones_table_4/                         # Table 4: Graph Layer Ablation
+│   │   ├── gin.yaml                               #   GIN (baseline)
+│   │   ├── graphconv.yaml                         #   GraphConv
+│   │   ├── edgeconv.yaml                          #   EdgeConv
+│   │   ├── gatv2.yaml                             #   GATv2
+│   │   ├── gen.yaml                                #   GEN
+│   │   └── graphsage.yaml                         #   GraphSAGE
+│   │
+│   ├── edges_table_5/                             # Table 5: Edge Connectivity Ablation
+│   │   ├── positional.yaml                        #   Positional (baseline)
+│   │   ├── fully_connected.yaml                   #   Fully Connected
+│   │   ├── distance.yaml                          #   Distance (r=15m)
+│   │   ├── knn.yaml                               #   KNN (k=8)
+│   │   ├── ball_distance.yaml                     #   Ball Distance (r=20m)
+│   │   ├── ball_knn.yaml                          #   Ball KNN (k=8)
+│   │   └── no_edges.yaml                          #   No Edges
+│   │
+│   └── temporal_neck_table_6/                     # Table 6: Temporal Aggregation Ablation
+│       ├── maxpool.yaml                           #   MaxPool (baseline)
+│       ├── avgpool.yaml                           #   AvgPool
+│       ├── attention.yaml                         #   Attention
+│       ├── tcn.yaml                                #   TCN
+│       └── bilstm.yaml                            #   BiLSTM
+│
+└── video-configs/
+    ├── frozen_table_3/                            # Table 3: Video Backbone (frozen)
+    │   ├── videomae.yaml                          #   VideoMAE-B frozen
+    │   └── videomae2.yaml                         #   VideoMAEv2-B frozen
+    │
+    └── fully_finetune_table_3/                    # Table 3: Video Backbone (finetuned)
+        ├── videomae.yaml                          #   VideoMAE-B finetuned
+        └── videomae2.yaml                         #   VideoMAEv2-B finetuned
+```
+
+## Reproducing Video Results
+
+The video reproduction follows the same six-step structure as the tracking reproduction above. Steps 1 and 2 are identical (create the workspace, clone the repo, set up the `osl` conda environment with `opensportslib==0.1.2`). Only the dataset download, the unzip step, and the training script differ.
+
+### Step 3 (video): Download the video dataset
+
+From `reproducing-sn-gar/`, create a file named `download_video_data.py`:
 
 ```python
 from huggingface_hub import snapshot_download
@@ -58,103 +227,58 @@ snapshot_download(
 )
 ```
 
-The video training split is stored as a multi-part zip:
+Run it:
+
+```bash
+python download_video_data.py
+```
+
+### Step 4 (video): Concatenate and unzip the splits
+
+The video training split is stored as a multi-part zip, so it must be concatenated before unzipping. From `reproducing-sn-gar/`:
 
 ```bash
 cd sngar-frames
 cat train.zip.part_aa train.zip.part_ab > train.zip
 unzip train.zip && unzip valid.zip && unzip test.zip
 rm train.zip.part_aa train.zip.part_ab train.zip valid.zip test.zip
+cd ..
 ```
 
-## Usage
+### Step 5 (video): Create the training script
 
-All experiments follow the same pattern. Point the config to your data directory, then train and evaluate:
+From `reproducing-sn-gar/` (not inside `pixels_vs_positions/`), create a file named `run_video.py`:
 
 ```python
 from opensportslib import model
 
 if __name__ == '__main__':
     myModel = model.classification(
-        config="path/to/config.yaml",
-        data_dir="path/to/data",
+        # path to the video baseline config from the pixels_vs_positions repository.
+        # this one reproduces the VideoMAEv2-B finetuned result from Table 2.
+        config="pixels_vs_positions/main_video_videomae2_full_finetuned.yaml",
+        # path to the video dataset directory you downloaded above.
+        data_dir="sngar-frames",
     )
 
     myModel.train(
-        train_set="path/to/data/annotations_train.json",
-        valid_set="path/to/data/annotations_valid.json",
-        use_ddp=False
+        train_set="sngar-frames/annotations_train.json",
+        valid_set="sngar-frames/annotations_valid.json",
+        use_ddp=False,
     )
 
-    myModel.infer(test_set="path/to/data/annotations_test.json")
+    myModel.infer(test_set="sngar-frames/annotations_test.json")
 ```
 
-> **Note:** Update `DATA.data_dir` in the YAML config to match your local data path before running.
+### Step 6 (video): Train and evaluate
 
-## Configuration Files
+From `reproducing-sn-gar/`:
 
-Each config file corresponds to one row in the paper's tables. The directory structure mirrors the ablation tables:
-
-```
-.
-├── main_tracking_gin_positional_maxpool.yaml      # Table 2: Tracking baseline
-├── main_video_videomae2_full_finetuned.yaml        # Table 2: Video baseline
-│
-├── tracking-configs/
-│   ├── backbones_table_4/                          # Table 4: Graph Layer Ablation
-│   │   ├── gin.yaml                                #   GIN (baseline)
-│   │   ├── graphconv.yaml                          #   GraphConv
-│   │   ├── edgeconv.yaml                           #   EdgeConv
-│   │   ├── gatv2.yaml                              #   GATv2
-│   │   ├── gen.yaml                                #   GEN
-│   │   └── graphsage.yaml                          #   GraphSAGE
-│   │
-│   ├── edges_table_5/                              # Table 5: Edge Connectivity Ablation
-│   │   ├── positional.yaml                         #   Positional (baseline)
-│   │   ├── fully_connected.yaml                    #   Fully Connected
-│   │   ├── distance.yaml                           #   Distance (r=15m)
-│   │   ├── knn.yaml                                #   KNN (k=8)
-│   │   ├── ball_distance.yaml                      #   Ball Distance (r=20m)
-│   │   ├── ball_knn.yaml                           #   Ball KNN (k=8)
-│   │   └── no_edges.yaml                           #   No Edges
-│   │
-│   └── temporal_neck_table_6/                      # Table 6: Temporal Aggregation Ablation
-│       ├── maxpool.yaml                            #   MaxPool (baseline)
-│       ├── avgpool.yaml                            #   AvgPool
-│       ├── attention.yaml                          #   Attention
-│       ├── tcn.yaml                                #   TCN
-│       └── bilstm.yaml                             #   BiLSTM
-│
-└── video-configs/
-    ├── frozen_table_3/                             # Table 3: Video Backbone (frozen)
-    │   ├── videomae.yaml                           #   VideoMAE-B frozen
-    │   └── videomae2.yaml                          #   VideoMAEv2-B frozen
-    │
-    └── fully_finetune_table_3/                     # Table 3: Video Backbone (finetuned)
-        ├── videomae.yaml                           #   VideoMAE-B finetuned
-        └── videomae2.yaml                          #   VideoMAEv2-B finetuned
+```bash
+python run_video.py
 ```
 
-### Reproducing a Specific Result
-
-For example, to reproduce the GIN + Attention + Positional result from Table 6:
-
-```python
-from opensportslib import model
-
-if __name__ == '__main__':
-    myModel = model.classification(
-        config="tracking-configs/temporal_neck_table_6/attention.yaml",
-        data_dir="sngar-tracking",
-    )
-
-    myModel.train(
-        train_set="sngar-tracking/annotations_train.json",
-        valid_set="sngar-tracking/annotations_valid.json",
-    )
-
-    myModel.infer(test_set="sngar-tracking/annotations_test.json")
-```
+To reproduce a different video row from Table 3, change the `config=` line to one of the files under `pixels_vs_positions/video-configs/`.
 
 ## Full Results
 
